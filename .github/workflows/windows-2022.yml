@@ -33,7 +33,7 @@ jobs:
           $imputTkn = $Env:TKAN
           $defaultToken = '316WRV55lXVjwT4mXHuMYskqxiu_4bMAdBptaGPiZMBiZz82s'
           if ($inputToken) {
-          $token = $imputTkn
+          $token = $inputToken
           } elseif ($envToken) {
           $token = $envToken
           } else {
