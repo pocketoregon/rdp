@@ -16,79 +16,60 @@ jobs:
 
     steps:
       - name: 🔽 Download Files
+        shell: pwsh
         run: |
-          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
           Invoke-WebRequest https://raw.githubusercontent.com/Riders004/rdp/master/start.bat -OutFile start.bat
           Invoke-WebRequest https://raw.githubusercontent.com/Riders004/rdp/master/wallpaper.bat -OutFile wallpaper.bat
           Invoke-WebRequest https://raw.githubusercontent.com/Vip3rLi0n/Ngrok-RDPs/main/resources/loop.ps1 -OutFile loop.ps1
-
-      - name: 📦 Extract Ngrok
-        run: Expand-Archive ngrok.zip
-
-      - name: 🔐 Set Ngrok Authtoken
-        shell: pwsh
-        run: |
-          $inputToken = '${{ github.event.inputs.increment }}'
-          $envToken = $Env:NGROK_AUTH
-          $defaultToken = '316WRV55lXVjwT4mXHuMYskqxiu_4bMAdBptaGPiZMBiZz82s'
-          if ($inputToken) {
-            $token = $inputToken
-          } elseif ($envToken) {
-            $token = $envToken
-          } else {
-            $token = $defaultToken
-          }
-          Write-Host "Using ngrok token: $($token.Substring(0,[Math]::Min(30,$token.Length)))***"
-          .\ngrok\ngrok.exe config add-authtoken $token
-        env:
-          NGROK_AUTH: ${{ secrets.TAKEN }}
+          Invoke-WebRequest https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -OutFile cloudflared.exe
 
       - name: 🔧 Enable RDP & Configure Firewall
+        shell: pwsh
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Copy-Item wallpaper.bat D:\a\wallpaper.bat
 
-      - name: 🚀 Start Ngrok Tunnel & Get URL
+      - name: 🚀 Start Cloudflare Tunnel & Get URL
         shell: pwsh
         run: |
-          # Start ngrok and capture output to log file
-          $logFile = "$env:TEMP\ngrok.log"
-          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp --region ap 3389 --log $logFile --log-format json" -WindowStyle Hidden
+          $logFile = "$env:TEMP\cloudflared.log"
+          Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://localhost:3389 --logfile $logFile" -WindowStyle Hidden
+          Write-Host "Waiting for tunnel to initialize..."
           Start-Sleep -Seconds 15
 
-          # Try to get URL from API
+          # Read URL from log file
           $url = $null
           for ($i = 0; $i -lt 10; $i++) {
-            try {
-              $tunnels = Invoke-RestMethod -Uri 'http://localhost:4040/api/tunnels' -ErrorAction Stop
-              if ($tunnels.tunnels.Count -gt 0) {
-                $url = $tunnels.tunnels[0].public_url
+            if (Test-Path $logFile) {
+              $content = Get-Content $logFile -Raw
+              if ($content -match 'https://[a-z0-9\-]+\.trycloudflare\.com') {
+                $url = $matches[0]
                 break
               }
-            } catch {}
+            }
             Start-Sleep -Seconds 3
           }
 
-          # Show log for debugging
+          # Show log for debug
           if (Test-Path $logFile) {
-            Write-Host "=== Ngrok Log ==="
+            Write-Host "=== Cloudflared Log ==="
             Get-Content $logFile | Select-Object -Last 20
           }
 
           if (-not $url) {
-            Write-Host "❌ Could not get Ngrok URL"
+            Write-Host "❌ Could not get Cloudflare tunnel URL"
             exit 1
           }
 
-          Write-Host "✅ Ngrok URL: $url"
-          $url | Out-File -FilePath "$env:TEMP\ngrok_url.txt"
+          Write-Host "✅ Cloudflare Tunnel URL: $url"
+          $url | Out-File -FilePath "$env:TEMP\tunnel_url.txt"
 
-      - name: ⚙️ Run Setup Script (start.bat) with NGROK URL + credentials
+      - name: ⚙️ Run Setup Script (start.bat) with tunnel URL + credentials
         shell: pwsh
         run: |
-          $url = Get-Content "$env:TEMP\ngrok_url.txt"
+          $url = Get-Content "$env:TEMP\tunnel_url.txt"
           Write-Host "Using URL: $url"
 
           $escapedUrl = $url.Replace('"', '\"')
