@@ -70,14 +70,14 @@ jobs:
         shell: pwsh
         run: Start-Sleep -Seconds 20
 
-        - name: Debug Ngrok API response raw
-          shell: pwsh
-          run: |
-            try { 
-              Invoke-RestMethod http://localhost:4040/api/tunnels | ConvertTo-Json 
-            } catch { 
-              Write-Host "API not reachable: $_" 
-            }
+      - name: Debug Ngrok API response raw
+        shell: pwsh
+        run: |
+          try {
+            Invoke-RestMethod http://localhost:4040/api/tunnels | ConvertTo-Json
+          } catch {
+            Write-Host "API not reachable: $_"
+          }
 
       - name: ⚙️ Run Setup Script (start.bat) with NGROK URL + credentials
         shell: pwsh
@@ -107,7 +107,6 @@ jobs:
           $escapedPass = 'OLDUSER#06'.Replace('"','\"')
 
           $cmd = "start.bat `"$escapedUrl`" `"$escapedUser`" `"$escapedPass`""
-          #Write-Host "Running: $cmd"
           cmd.exe /c $cmd
 
       - name: 🌐 Debug Ngrok API response raw
