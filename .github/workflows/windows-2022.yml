@@ -2,6 +2,12 @@ name: WINDOWS TOKEN RDP
 
 on:
   workflow_dispatch:
+    inputs:
+      rclone_token:
+        type: string
+        description: 'Google Drive rclone token (optional - for file sync)'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -42,40 +48,52 @@ jobs:
           [System.Environment]::SetEnvironmentVariable("LIBGL_ALWAYS_SOFTWARE", "1", "Machine")
           Write-Host "✅ Mesa environment variables set"
 
-      - name: 📦 Install Rclone & Configure Google Drive
+      - name: 📦 Setup Rclone & Google Drive Sync
         shell: pwsh
         run: |
-          # Download and install rclone
+          $token = '${{ github.event.inputs.rclone_token }}'
+
+          if (-not $token) {
+            Write-Host "⚠️ No rclone token provided — skipping Google Drive sync"
+            exit 0
+          }
+
+          # Install rclone
           Invoke-WebRequest https://downloads.rclone.org/rclone-current-windows-amd64.zip -OutFile rclone.zip
           Expand-Archive rclone.zip -DestinationPath rclone_tmp
           $rcloneExe = Get-ChildItem rclone_tmp -Recurse -Filter "rclone.exe" | Select-Object -First 1
           Copy-Item $rcloneExe.FullName "C:\rclone.exe"
           Write-Host "✅ Rclone installed"
 
-          # Write rclone config from secret
+          # Write rclone config
           $configDir = "$env:APPDATA\rclone"
           New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-          $Env:RCLONE_CONFIG | Out-File -FilePath "$configDir\rclone.conf" -Encoding utf8
+          $config = @"
+          [gdrive]
+          type = drive
+          token = $token
+          "@
+          $config | Out-File -FilePath "$configDir\rclone.conf" -Encoding utf8
           Write-Host "✅ Rclone config written"
-
-          # Restore work folder from Google Drive if it exists
-          Write-Host "🔄 Restoring files from Google Drive..."
-          & C:\rclone.exe copy gdrive:RDP-Workspace C:\Workspace --progress 2>&1
-          Write-Host "✅ Restore complete"
 
           # Create workspace folder
           New-Item -ItemType Directory -Force -Path C:\Workspace | Out-Null
 
-          # Create desktop shortcut for manual sync
-          $desktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
-          $syncScript = @"
+          # Restore from Google Drive
+          Write-Host "🔄 Restoring files from Google Drive..."
+          & C:\rclone.exe copy gdrive:RDP-Workspace C:\Workspace --progress 2>&1
+          Write-Host "✅ Restore complete"
+
+          # Desktop shortcut for manual sync
+          $syncScript = @'
           Write-Host "Syncing to Google Drive..."
           & C:\rclone.exe copy C:\Workspace gdrive:RDP-Workspace --progress
           Write-Host "Done! Press any key..."
           pause
-          "@
+          '@
           $syncScript | Out-File -FilePath "C:\SyncNow.ps1" -Encoding utf8
 
+          $desktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
           $WshShell = New-Object -ComObject WScript.Shell
           $Shortcut = $WshShell.CreateShortcut("$desktop\Sync to Google Drive.lnk")
           $Shortcut.TargetPath = "powershell.exe"
@@ -84,19 +102,17 @@ jobs:
           $Shortcut.Save()
           Write-Host "✅ Desktop shortcut created"
 
-          # Start auto-sync every 5 minutes in background
-          $autoSync = @"
-          while (`$true) {
+          # Auto-sync every 5 minutes in background
+          $autoSync = @'
+          while ($true) {
             Start-Sleep -Seconds 300
             & C:\rclone.exe copy C:\Workspace gdrive:RDP-Workspace --quiet 2>&1 | Out-Null
-            Write-Host "[`$(Get-Date -Format 'HH:mm:ss')] Auto-synced to Google Drive"
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Auto-synced to Google Drive"
           }
-          "@
+          '@
           $autoSync | Out-File -FilePath "C:\AutoSync.ps1" -Encoding utf8
           Start-Process -WindowStyle Hidden powershell -ArgumentList "-ExecutionPolicy Bypass -File C:\AutoSync.ps1"
           Write-Host "✅ Auto-sync started (every 5 minutes)"
-        env:
-          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
 
       - name: 🚀 Start Cloudflare Tunnel & Get URL
         shell: pwsh
