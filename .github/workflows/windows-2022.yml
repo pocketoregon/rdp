@@ -30,19 +30,73 @@ jobs:
         run: |
           Invoke-WebRequest https://github.com/pal1000/mesa-dist-win/releases/download/23.3.1/mesa3d-23.3.1-release-mingw.7z -OutFile mesa.7z
           7z x mesa.7z -omesa
-          # Copy to blender folder instead of System32
           $blenderPath = "C:\Program Files\Blender Foundation"
           if (Test-Path $blenderPath) {
             $blenderExe = Get-ChildItem $blenderPath -Recurse -Filter "blender.exe" | Select-Object -First 1
             if ($blenderExe) {
               Copy-Item mesa\x64\opengl32.dll $blenderExe.DirectoryName -Force
-              Write-Host "✅ Mesa OpenGL copied to Blender folder: $($blenderExe.DirectoryName)"
+              Write-Host "✅ Mesa OpenGL copied to Blender folder"
             }
           }
-          # Also set environment variable for software rendering
           [System.Environment]::SetEnvironmentVariable("MESA_GL_VERSION_OVERRIDE", "4.5", "Machine")
           [System.Environment]::SetEnvironmentVariable("LIBGL_ALWAYS_SOFTWARE", "1", "Machine")
           Write-Host "✅ Mesa environment variables set"
+
+      - name: 📦 Install Rclone & Configure Google Drive
+        shell: pwsh
+        run: |
+          # Download and install rclone
+          Invoke-WebRequest https://downloads.rclone.org/rclone-current-windows-amd64.zip -OutFile rclone.zip
+          Expand-Archive rclone.zip -DestinationPath rclone_tmp
+          $rcloneExe = Get-ChildItem rclone_tmp -Recurse -Filter "rclone.exe" | Select-Object -First 1
+          Copy-Item $rcloneExe.FullName "C:\rclone.exe"
+          Write-Host "✅ Rclone installed"
+
+          # Write rclone config from secret
+          $configDir = "$env:APPDATA\rclone"
+          New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+          $Env:RCLONE_CONFIG | Out-File -FilePath "$configDir\rclone.conf" -Encoding utf8
+          Write-Host "✅ Rclone config written"
+
+          # Restore work folder from Google Drive if it exists
+          Write-Host "🔄 Restoring files from Google Drive..."
+          & C:\rclone.exe copy gdrive:RDP-Workspace C:\Workspace --progress 2>&1
+          Write-Host "✅ Restore complete"
+
+          # Create workspace folder
+          New-Item -ItemType Directory -Force -Path C:\Workspace | Out-Null
+
+          # Create desktop shortcut for manual sync
+          $desktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
+          $syncScript = @"
+          Write-Host "Syncing to Google Drive..."
+          & C:\rclone.exe copy C:\Workspace gdrive:RDP-Workspace --progress
+          Write-Host "Done! Press any key..."
+          pause
+          "@
+          $syncScript | Out-File -FilePath "C:\SyncNow.ps1" -Encoding utf8
+
+          $WshShell = New-Object -ComObject WScript.Shell
+          $Shortcut = $WshShell.CreateShortcut("$desktop\Sync to Google Drive.lnk")
+          $Shortcut.TargetPath = "powershell.exe"
+          $Shortcut.Arguments = "-ExecutionPolicy Bypass -File C:\SyncNow.ps1"
+          $Shortcut.IconLocation = "shell32.dll,46"
+          $Shortcut.Save()
+          Write-Host "✅ Desktop shortcut created"
+
+          # Start auto-sync every 5 minutes in background
+          $autoSync = @"
+          while (`$true) {
+            Start-Sleep -Seconds 300
+            & C:\rclone.exe copy C:\Workspace gdrive:RDP-Workspace --quiet 2>&1 | Out-Null
+            Write-Host "[`$(Get-Date -Format 'HH:mm:ss')] Auto-synced to Google Drive"
+          }
+          "@
+          $autoSync | Out-File -FilePath "C:\AutoSync.ps1" -Encoding utf8
+          Start-Process -WindowStyle Hidden powershell -ArgumentList "-ExecutionPolicy Bypass -File C:\AutoSync.ps1"
+          Write-Host "✅ Auto-sync started (every 5 minutes)"
+        env:
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
 
       - name: 🚀 Start Cloudflare Tunnel & Get URL
         shell: pwsh
