@@ -31,6 +31,24 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Copy-Item wallpaper.bat D:\a\wallpaper.bat
 
+      - name: 🖼️ Set Wallpaper
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://i.ibb.co/0dD6P5g/one-piece-character-5120x2880-15328.jpg" -OutFile "C:\wallpaper.jpg"
+
+          if (-not (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP")) {
+            New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Force | Out-Null
+          }
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "DesktopImagePath" -Value "C:\wallpaper.jpg" -Force
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "DesktopImageUrl" -Value "C:\wallpaper.jpg" -Force
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "DesktopImageStatus" -Value 1 -Force
+
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "Wallpaper" -Value "C:\wallpaper.jpg" -Force
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10" -Force
+
+          RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+          Write-Host "✅ Wallpaper set"
+
       - name: 🎨 Install Mesa Software OpenGL (for Blender GUI)
         shell: pwsh
         run: |
@@ -52,20 +70,15 @@ jobs:
         shell: pwsh
         run: |
           $token = '${{ github.event.inputs.rclone_token }}'
-
           if (-not $token) {
             Write-Host "⚠️ No rclone token provided — skipping Google Drive sync"
             exit 0
           }
-
-          # Install rclone
           Invoke-WebRequest https://downloads.rclone.org/rclone-current-windows-amd64.zip -OutFile rclone.zip
           Expand-Archive rclone.zip -DestinationPath rclone_tmp
           $rcloneExe = Get-ChildItem rclone_tmp -Recurse -Filter "rclone.exe" | Select-Object -First 1
           Copy-Item $rcloneExe.FullName "C:\rclone.exe"
           Write-Host "✅ Rclone installed"
-
-          # Write rclone config
           $configDir = "$env:APPDATA\rclone"
           New-Item -ItemType Directory -Force -Path $configDir | Out-Null
           $config = @"
@@ -75,16 +88,10 @@ jobs:
           "@
           $config | Out-File -FilePath "$configDir\rclone.conf" -Encoding utf8
           Write-Host "✅ Rclone config written"
-
-          # Create workspace folder
           New-Item -ItemType Directory -Force -Path C:\Workspace | Out-Null
-
-          # Restore from Google Drive
           Write-Host "🔄 Restoring files from Google Drive..."
           & C:\rclone.exe copy gdrive:RDP-Workspace C:\Workspace --progress 2>&1
           Write-Host "✅ Restore complete"
-
-          # Desktop shortcut for manual sync
           $syncScript = @'
           Write-Host "Syncing to Google Drive..."
           & C:\rclone.exe copy C:\Workspace gdrive:RDP-Workspace --progress
@@ -92,7 +99,6 @@ jobs:
           pause
           '@
           $syncScript | Out-File -FilePath "C:\SyncNow.ps1" -Encoding utf8
-
           $desktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
           $WshShell = New-Object -ComObject WScript.Shell
           $Shortcut = $WshShell.CreateShortcut("$desktop\Sync to Google Drive.lnk")
@@ -101,8 +107,6 @@ jobs:
           $Shortcut.IconLocation = "shell32.dll,46"
           $Shortcut.Save()
           Write-Host "✅ Desktop shortcut created"
-
-          # Auto-sync every 5 minutes in background
           $autoSync = @'
           while ($true) {
             Start-Sleep -Seconds 300
@@ -121,7 +125,6 @@ jobs:
           Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://localhost:3389 --logfile $logFile" -WindowStyle Hidden
           Write-Host "Waiting for tunnel to initialize..."
           Start-Sleep -Seconds 15
-
           $url = $null
           for ($i = 0; $i -lt 10; $i++) {
             if (Test-Path $logFile) {
@@ -133,17 +136,14 @@ jobs:
             }
             Start-Sleep -Seconds 3
           }
-
           if (Test-Path $logFile) {
             Write-Host "=== Cloudflared Log ==="
             Get-Content $logFile | Select-Object -Last 20
           }
-
           if (-not $url) {
             Write-Host "❌ Could not get Cloudflare tunnel URL"
             exit 1
           }
-
           Write-Host "✅ Cloudflare Tunnel URL: $url"
           $url | Out-File -FilePath "$env:TEMP\tunnel_url.txt"
 
@@ -152,11 +152,9 @@ jobs:
         run: |
           $url = Get-Content "$env:TEMP\tunnel_url.txt"
           Write-Host "Using URL: $url"
-
           $escapedUrl = $url.Replace('"', '\"')
           $escapedUser = 'administrator'.Replace('"','\"')
           $escapedPass = 'OLDUSER#06'.Replace('"','\"')
-
           $cmd = "start.bat `"$escapedUrl`" `"$escapedUser`" `"$escapedPass`""
           cmd.exe /c $cmd
 
