@@ -53,7 +53,8 @@ jobs:
           Copy-Item wallpaper.bat D:\a\wallpaper.bat
 
       - name: 🚀 Start Ngrok Tunnel (Hidden Window)
-        run: Start-Process -WindowStyle Hidden PowerShell -ArgumentList './ngrok/ngrok.exe tcp --region ap 3389'
+        shell: pwsh
+        run: Start-Process -WindowStyle Hidden -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp --region ap 3389"
 
       - name: 🔎 Verify Ngrok process is running
         shell: pwsh
@@ -69,15 +70,6 @@ jobs:
       - name: 🕐 Wait for Ngrok to Initialize
         shell: pwsh
         run: Start-Sleep -Seconds 20
-
-      - name: Debug Ngrok API response raw
-        shell: pwsh
-        run: |
-          try {
-            Invoke-RestMethod http://localhost:4040/api/tunnels | ConvertTo-Json
-          } catch {
-            Write-Host "API not reachable: $_"
-          }
 
       - name: ⚙️ Run Setup Script (start.bat) with NGROK URL + credentials
         shell: pwsh
@@ -108,10 +100,6 @@ jobs:
 
           $cmd = "start.bat `"$escapedUrl`" `"$escapedUser`" `"$escapedPass`""
           cmd.exe /c $cmd
-
-      - name: 🌐 Debug Ngrok API response raw
-        shell: pwsh
-        run: curl.exe -s http://localhost:4040/api/tunnels | Write-Host
 
       - name: 🔁 Keep Runner Alive
         shell: pwsh
