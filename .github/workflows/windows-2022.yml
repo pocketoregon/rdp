@@ -35,17 +35,14 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest "https://i.ibb.co/0dD6P5g/one-piece-character-5120x2880-15328.jpg" -OutFile "C:\wallpaper.jpg"
-
           if (-not (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP")) {
             New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Force | Out-Null
           }
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "DesktopImagePath" -Value "C:\wallpaper.jpg" -Force
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "DesktopImageUrl" -Value "C:\wallpaper.jpg" -Force
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "DesktopImageStatus" -Value 1 -Force
-
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "Wallpaper" -Value "C:\wallpaper.jpg" -Force
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10" -Force
-
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
           Write-Host "✅ Wallpaper set"
 
@@ -157,6 +154,13 @@ jobs:
           $escapedPass = 'OLDUSER#06'.Replace('"','\"')
           $cmd = "start.bat `"$escapedUrl`" `"$escapedUser`" `"$escapedPass`""
           cmd.exe /c $cmd
+
+          Write-Host ""
+          Write-Host "================================================"
+          Write-Host "📋 PASTE THIS COMMAND IN YOUR LOCAL CMD:"
+          Write-Host ""
+          Write-Host """C:\Users\SharCom\Downloads\cloudflared-windows-amd64.exe"" access tcp --hostname $url --url localhost:3390"
+          Write-Host "================================================"
 
       - name: 🔁 Keep Runner Alive
         shell: pwsh
