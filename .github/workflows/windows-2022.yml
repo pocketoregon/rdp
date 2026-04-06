@@ -30,8 +30,19 @@ jobs:
         run: |
           Invoke-WebRequest https://github.com/pal1000/mesa-dist-win/releases/download/23.3.1/mesa3d-23.3.1-release-mingw.7z -OutFile mesa.7z
           7z x mesa.7z -omesa
-          Copy-Item mesa\x64\opengl32.dll C:\Windows\System32\opengl32.dll -Force
-          Write-Host "✅ Mesa OpenGL installed"
+          # Copy to blender folder instead of System32
+          $blenderPath = "C:\Program Files\Blender Foundation"
+          if (Test-Path $blenderPath) {
+            $blenderExe = Get-ChildItem $blenderPath -Recurse -Filter "blender.exe" | Select-Object -First 1
+            if ($blenderExe) {
+              Copy-Item mesa\x64\opengl32.dll $blenderExe.DirectoryName -Force
+              Write-Host "✅ Mesa OpenGL copied to Blender folder: $($blenderExe.DirectoryName)"
+            }
+          }
+          # Also set environment variable for software rendering
+          [System.Environment]::SetEnvironmentVariable("MESA_GL_VERSION_OVERRIDE", "4.5", "Machine")
+          [System.Environment]::SetEnvironmentVariable("LIBGL_ALWAYS_SOFTWARE", "1", "Machine")
+          Write-Host "✅ Mesa environment variables set"
 
       - name: 🚀 Start Cloudflare Tunnel & Get URL
         shell: pwsh
