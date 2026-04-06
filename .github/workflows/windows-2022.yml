@@ -30,20 +30,18 @@ jobs:
         run: |
           $inputToken = '${{ github.event.inputs.increment }}'
           $envToken = $Env:NGROK_AUTH
-          $imputTkn = $Env:TKAN
           $defaultToken = '316WRV55lXVjwT4mXHuMYskqxiu_4bMAdBptaGPiZMBiZz82s'
           if ($inputToken) {
-          $token = $inputToken
+            $token = $inputToken
           } elseif ($envToken) {
-          $token = $envToken
+            $token = $envToken
           } else {
-          $token = $defaultToken
+            $token = $defaultToken
           }
           Write-Host "Using ngrok token: $($token.Substring(0,[Math]::Min(30,$token.Length)))***"
           .\ngrok\ngrok.exe config add-authtoken $token
         env:
           NGROK_AUTH: ${{ secrets.TAKEN }}
-          TKAN: ${{ vars.TOKUN }}
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -52,21 +50,16 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Copy-Item wallpaper.bat D:\a\wallpaper.bat
 
-      - name: 🚀 Start Ngrok Tunnel (Background Job)
+      - name: 🚀 Start Ngrok Tunnel
         shell: pwsh
         run: |
-          $job = Start-Job -ScriptBlock { & ".\ngrok\ngrok.exe" tcp --region ap 3389 }
-          Write-Host "Ngrok started as background job: $($job.Id)"
-
-      - name: 🔎 Verify Ngrok process is running
-        shell: pwsh
-        run: |
-          Start-Sleep -Seconds 5
+          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp --region ap 3389" -PassThru
+          Start-Sleep -Seconds 3
           $proc = Get-Process -Name ngrok -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "✅ Ngrok process is running (PID: $($proc.Id))"
+            Write-Host "✅ Ngrok started (PID: $($proc.Id))"
           } else {
-            Write-Host "❌ Ngrok process NOT found!"
+            Write-Host "❌ Ngrok failed to start"
             exit 1
           }
 
