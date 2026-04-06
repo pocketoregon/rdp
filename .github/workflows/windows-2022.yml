@@ -2,12 +2,6 @@ name: WINDOWS TOKEN RDP
 
 on:
   workflow_dispatch:
-    inputs:
-      increment:
-        type: string
-        description: 'ngrok token'
-        required: false
-        default: ''
 
 jobs:
   build:
@@ -39,7 +33,6 @@ jobs:
           Write-Host "Waiting for tunnel to initialize..."
           Start-Sleep -Seconds 15
 
-          # Read URL from log file
           $url = $null
           for ($i = 0; $i -lt 10; $i++) {
             if (Test-Path $logFile) {
@@ -52,7 +45,6 @@ jobs:
             Start-Sleep -Seconds 3
           }
 
-          # Show log for debug
           if (Test-Path $logFile) {
             Write-Host "=== Cloudflared Log ==="
             Get-Content $logFile | Select-Object -Last 20
