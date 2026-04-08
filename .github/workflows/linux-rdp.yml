@@ -15,25 +15,34 @@ jobs:
     timeout-minutes: 9999
 
     steps:
-      - name: 🔧 Install Minimal Desktop & RDP
+      - name: 🔧 Install Desktop & RDP
         run: |
+          echo "⏳ Updating packages..."
           sudo apt-get update -q
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xrdp dbus-x11
+          echo "✅ Done"
+
+          echo "⏳ Installing lightweight desktop + RDP..."
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            lxde-core \
+            xrdp \
+            dbus-x11
+          echo "✅ Desktop installed"
 
       - name: 👤 Setup User & RDP Access
         run: |
           echo "runner:OLDUSER#06" | sudo chpasswd
-          echo "startxfce4" > /home/runner/.xsession
+          echo "startlxde" > /home/runner/.xsession
           chmod +x /home/runner/.xsession
           sudo systemctl enable xrdp
           sudo systemctl start xrdp
           sleep 3
+          echo "✅ RDP ready"
 
       - name: 📦 Setup Rclone & Google Drive Sync
         run: |
           TOKEN="${{ github.event.inputs.rclone_token }}"
           if [ -z "$TOKEN" ]; then
-            echo "⚠️ No rclone token — skipping Google Drive sync"
+            echo "⚠️ No rclone token — skipping"
             exit 0
           fi
           curl https://rclone.org/install.sh | sudo bash
@@ -52,14 +61,13 @@ jobs:
           sleep 15
           URL=""
           for i in $(seq 1 10); do
+            echo "🔍 Attempt $i..."
             URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /tmp/cloudflared.log | head -1)
             if [ -n "$URL" ]; then break; fi
             sleep 3
           done
-          if [ -z "$URL" ]; then echo "❌ Could not get tunnel URL"; exit 1; fi
-          echo "✅ Tunnel URL: $URL"
-          echo "👤 Username: runner"
-          echo "🔑 Password: OLDUSER#06"
+          if [ -z "$URL" ]; then echo "❌ No tunnel URL"; exit 1; fi
+          echo "✅ Tunnel: $URL"
           echo "$URL" > /tmp/tunnel_url.txt
 
       - name: 🔁 Keep Runner Alive
