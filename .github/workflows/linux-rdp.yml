@@ -18,10 +18,7 @@ jobs:
       - name: 🔧 Install Minimal Desktop & RDP
         run: |
           sudo apt-get update -q
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            xfce4 \
-            xrdp \
-            dbus-x11
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xrdp dbus-x11
 
       - name: 👤 Setup User & RDP Access
         run: |
@@ -41,11 +38,7 @@ jobs:
           fi
           curl https://rclone.org/install.sh | sudo bash
           mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf << CONFEOF
-[gdrive]
-type = drive
-token = $TOKEN
-CONFEOF
+          printf "[gdrive]\ntype = drive\ntoken = %s\n" "$TOKEN" > ~/.config/rclone/rclone.conf
           mkdir -p ~/Workspace
           rclone copy gdrive:RDP-Workspace ~/Workspace --progress || true
           (while true; do sleep 300; rclone copy ~/Workspace gdrive:RDP-Workspace --quiet; done) &
@@ -77,7 +70,8 @@ CONFEOF
           echo "Tunnel URL : $URL"
           echo "Username   : runner"
           echo "Password   : OLDUSER#06"
-          echo "Connect   : cloudflared access tcp --hostname ${URL#https://} --url localhost:3390"
+          echo "Connect    : cloudflared access tcp --hostname ${URL#https://} --url localhost:3390"
           echo "Then RDP to: localhost:3390"
           echo "============================================"
           sleep 21600
+          
