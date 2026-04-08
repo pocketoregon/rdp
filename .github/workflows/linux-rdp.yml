@@ -15,62 +15,22 @@ jobs:
     timeout-minutes: 9999
 
     steps:
-      - name: 🔧 Install Desktop Environment & RDP
+      - name: 🔧 Install Minimal Desktop & RDP
         run: |
           sudo apt-get update -q
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            xfce4 xfce4-goodies \
+            xfce4 \
             xrdp \
-            dbus-x11 \
-            x11vnc \
-            curl wget git unzip \
-            firefox \
-            mousepad \
-            thunar \
-            xfce4-terminal
-
-      - name: 🎨 Install Themes & Make it Look Good
-        run: |
-          sudo apt-get install -y \
-            papirus-icon-theme \
-            arc-theme \
-            fonts-noto \
-            fonts-jetbrains-mono
-          
-          # Set theme for all users
-          mkdir -p /home/runner/.config/xfce4/xfconf/xfce-perchannel-xml
-          cat > /home/runner/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml << 'XMLEOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <channel name="xsettings" version="1.0">
-            <property name="Net" type="empty">
-              <property name="ThemeName" type="string" value="Arc-Dark"/>
-              <property name="IconThemeName" type="string" value="Papirus-Dark"/>
-            </property>
-            <property name="Gtk" type="empty">
-              <property name="FontName" type="string" value="Noto Sans 10"/>
-              <property name="MonospaceFontName" type="string" value="JetBrains Mono 10"/>
-            </property>
-          </channel>
-          XMLEOF
+            dbus-x11
 
       - name: 👤 Setup User & RDP Access
         run: |
-          # Set password for runner user
           echo "runner:OLDUSER#06" | sudo chpasswd
-
-          # Configure xrdp to use xfce
           echo "startxfce4" > /home/runner/.xsession
           chmod +x /home/runner/.xsession
-
-          # Fix xrdp
-          sudo sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config 2>/dev/null || true
-          sudo bash -c 'echo "allowed_users=anybody" >> /etc/X11/Xwrapper.config' 2>/dev/null || true
-
-          # Start xrdp
           sudo systemctl enable xrdp
           sudo systemctl start xrdp
           sleep 3
-          sudo systemctl status xrdp | head -5
 
       - name: 📦 Setup Rclone & Google Drive Sync
         run: |
@@ -79,60 +39,32 @@ jobs:
             echo "⚠️ No rclone token — skipping Google Drive sync"
             exit 0
           fi
-
           curl https://rclone.org/install.sh | sudo bash
-
           mkdir -p ~/.config/rclone
           cat > ~/.config/rclone/rclone.conf << CONFEOF
-          [gdrive]
-          type = drive
-          token = $TOKEN
-          CONFEOF
-
+[gdrive]
+type = drive
+token = $TOKEN
+CONFEOF
           mkdir -p ~/Workspace
-          echo "🔄 Restoring from Google Drive..."
           rclone copy gdrive:RDP-Workspace ~/Workspace --progress || true
-          echo "✅ Restore complete"
-
-          # Desktop shortcut for manual sync
-          cat > ~/Desktop/sync-now.sh << 'SHEOF'
-          #!/bin/bash
-          rclone copy ~/Workspace gdrive:RDP-Workspace --progress
-          echo "Done! Synced to Google Drive."
-          read -p "Press Enter to close..."
-          SHEOF
-          chmod +x ~/Desktop/sync-now.sh
-
-          # Auto sync every 5 mins
-          (while true; do sleep 300; rclone copy ~/Workspace gdrive:RDP-Workspace --quiet; echo "[$(date +%H:%M:%S)] Auto-synced"; done) &
+          (while true; do sleep 300; rclone copy ~/Workspace gdrive:RDP-Workspace --quiet; done) &
           echo "✅ Auto-sync started"
-
-      - name: 🔽 Download Cloudflare Tunnel
-        run: |
-          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
-          chmod +x cloudflared
 
       - name: 🚀 Start Cloudflare Tunnel & Get URL
         run: |
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+          chmod +x cloudflared
           ./cloudflared tunnel --url tcp://localhost:3389 --logfile /tmp/cloudflared.log &
-          echo "Waiting for tunnel..."
           sleep 15
-
           URL=""
           for i in $(seq 1 10); do
             URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /tmp/cloudflared.log | head -1)
             if [ -n "$URL" ]; then break; fi
             sleep 3
           done
-
-          cat /tmp/cloudflared.log | tail -20
-
-          if [ -z "$URL" ]; then
-            echo "❌ Could not get tunnel URL"
-            exit 1
-          fi
-
-          echo "✅ Cloudflare Tunnel URL: $URL"
+          if [ -z "$URL" ]; then echo "❌ Could not get tunnel URL"; exit 1; fi
+          echo "✅ Tunnel URL: $URL"
           echo "👤 Username: runner"
           echo "🔑 Password: OLDUSER#06"
           echo "$URL" > /tmp/tunnel_url.txt
@@ -142,13 +74,10 @@ jobs:
           URL=$(cat /tmp/tunnel_url.txt)
           echo "============================================"
           echo "✅ LINUX RDP IS READY!"
-          echo "============================================"
           echo "Tunnel URL : $URL"
           echo "Username   : runner"
           echo "Password   : OLDUSER#06"
-          echo "============================================"
-          echo "Connect using cloudflared on your PC:"
-          echo "cloudflared access tcp --hostname ${URL#https://} --url localhost:3390"
-          echo "Then RDP to localhost:3390"
+          echo "Connect   : cloudflared access tcp --hostname ${URL#https://} --url localhost:3390"
+          echo "Then RDP to: localhost:3390"
           echo "============================================"
           sleep 21600
